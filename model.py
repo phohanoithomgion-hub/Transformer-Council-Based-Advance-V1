@@ -2597,19 +2597,19 @@ class FinalBlockRouter(nn.Module):
         q_pm_r = self.q_head_proj(q_pm_c.to(q_dt)).float()
         if seq_k_bm_list is None:
             k_bm_r = self.k_head_proj(k_bm_h.to(k_dt)).float()
-            head_sim = torch.einsum('bhqd,bnhd->bhqn', q_pm_r, k_bm_r) * scale
+            head_sim = torch.einsum('bhqd,bnhd->bhqn', q_pm_r, k_bm_r).float() * scale
         else:
             head_sim = torch.zeros(B, H, Qc, NB, device=device, dtype=torch.float32)
             for s_val, k_bm_sh, _ in seq_k_bm_list:
                 qm_s = (seq_eff_q_c == s_val) & valid_tok_q_c
                 if qm_s.any():
                     k_bm_sr = self.k_head_proj(k_bm_sh.to(k_dt)).float()
-                    sc_s = torch.einsum('bhqd,bnhd->bhqn', q_pm_r, k_bm_sr) * scale
+                    sc_s = torch.einsum('bhqd,bnhd->bhqn', q_pm_r, k_bm_sr).float() * scale
                     head_sim = torch.where(qm_s[:, None, :, None], sc_s, head_sim)
         k_self_r = self.k_head_proj(k_self_c.to(k_dt)).float()
         diag_score = (q_pm_r * k_self_r).sum(dim=-1) * scale
         diag_idx = tok_blk_q_c.unsqueeze(1).unsqueeze(-1).expand(-1, H, -1, -1)
-        head_sim = head_sim.scatter(3, diag_idx, diag_score.unsqueeze(-1))
+        head_sim = head_sim.scatter(3, diag_idx, diag_score.unsqueeze(-1).to(head_sim.dtype))
         head_bias = self.head_pair_bias(pair_feats_c.to(self.head_pair_bias.weight.dtype)).float().permute(0, 3, 1, 2)
         head_scores = head_sim + head_bias
         return self._select_heads_and_gate(head_scores, pair_feats_c, causal_blk_c)
@@ -2619,7 +2619,7 @@ class FinalBlockRouter(nn.Module):
         scale = hd ** -0.5
         q_r = self.q_head_proj(q_mean.to(self.q_head_proj.weight.dtype)).float()
         k_r = self.k_head_proj(k_bm_h.to(self.k_head_proj.weight.dtype)).float()
-        head_sim = torch.einsum('bhqd,bnhd->bhqn', q_r, k_r) * scale
+        head_sim = torch.einsum('bhqd,bnhd->bhqn', q_r, k_r).float() * scale
         head_bias = self.head_pair_bias(pair_feats.to(self.head_pair_bias.weight.dtype)).float().permute(0, 3, 1, 2)
         head_scores = head_sim + head_bias
         return self._select_heads_and_gate(head_scores, pair_feats, causal_blk)
